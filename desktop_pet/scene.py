@@ -45,6 +45,13 @@ class PetScene(ttk.Frame):
     def start(self) -> None:
         self.after(self.tick_ms, self._tick)
 
+    def set_pet(self, pet_id: str) -> None:
+        if pet_id == self.pet_id:
+            return
+
+        self.pet_id = pet_id
+        self._draw_pet()
+
     def _draw_background(self) -> None:
         self.canvas.delete("background")
         width = self.canvas_width

@@ -8,11 +8,17 @@ from .pets import PET_DEFINITIONS, DEFAULT_PET_ID, draw_pet
 
 
 class PetSelectionDialog(tk.Toplevel):
-    def __init__(self, master: tk.Tk) -> None:
+    def __init__(
+        self,
+        master: tk.Tk,
+        initial_pet_id: str = DEFAULT_PET_ID,
+        allow_cancel: bool = False,
+    ) -> None:
         super().__init__(master)
         self.selected_pet: Optional[str] = None
-        self.choice = tk.StringVar(value=DEFAULT_PET_ID)
+        self.choice = tk.StringVar(value=initial_pet_id if initial_pet_id in PET_DEFINITIONS else DEFAULT_PET_ID)
         self._card_frames: Dict[str, ttk.Frame] = {}
+        self.allow_cancel = allow_cancel
 
         self.title("选择你的桌面宠物")
         self.configure(bg="#fff6ea")
@@ -25,20 +31,26 @@ class PetSelectionDialog(tk.Toplevel):
         self._refresh_highlight()
         self._show_dialog()
 
-        self.protocol("WM_DELETE_WINDOW", self._confirm)
+        self.protocol("WM_DELETE_WINDOW", self._cancel if self.allow_cancel else self._confirm)
 
     def _build(self) -> None:
         wrapper = ttk.Frame(self, padding=20, style="Surface.TFrame")
         wrapper.pack(fill="both", expand=True)
 
+        heading = "第一次见面，先挑一个陪你的宠物吧"
+        subtitle = "本次会记住你的选择，后续启动默认直接进入主界面。"
+        if self.allow_cancel:
+            heading = "想换个伙伴的话，可以重新挑选"
+            subtitle = "只有点击确认后才会切换宠物；关闭或取消会继续保留当前选择。"
+
         ttk.Label(
             wrapper,
-            text="第一次见面，先挑一个陪你的宠物吧",
+            text=heading,
             style="Title.TLabel",
         ).pack(anchor="w")
         ttk.Label(
             wrapper,
-            text="本次会记住你的选择，后续启动默认直接进入主界面。",
+            text=subtitle,
             style="Body.TLabel",
         ).pack(anchor="w", pady=(6, 18))
 
@@ -54,6 +66,14 @@ class PetSelectionDialog(tk.Toplevel):
 
         footer = ttk.Frame(wrapper, style="Surface.TFrame")
         footer.pack(fill="x", pady=(16, 0))
+
+        if self.allow_cancel:
+            ttk.Button(
+                footer,
+                text="取消",
+                command=self._cancel,
+                style="Secondary.TButton",
+            ).pack(side="right", padx=(0, 10))
 
         ttk.Button(
             footer,
@@ -123,6 +143,10 @@ class PetSelectionDialog(tk.Toplevel):
 
     def _confirm(self) -> None:
         self.selected_pet = self.choice.get() or DEFAULT_PET_ID
+        self.destroy()
+
+    def _cancel(self) -> None:
+        self.selected_pet = None
         self.destroy()
 
     def _show_dialog(self) -> None:
