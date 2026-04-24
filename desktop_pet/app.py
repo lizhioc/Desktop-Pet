@@ -2,12 +2,19 @@ from __future__ import annotations
 
 import tkinter as tk
 from tkinter import ttk
+from typing import Optional
 
-from .pets import DEFAULT_PET_ID, PET_DEFINITIONS
-from .scene import PetScene
-from .selection import PetSelectionDialog
-from .settings import clear_selected_pet, load_settings, remember_selected_pet
-from .settings_panel import SettingsPanel
+from .pets import CHARACTER_DEFINITIONS, DEFAULT_CHARACTER_ID
+from .scene import PetScene, TRANSPARENT_COLOR
+from .selection import CharacterSelectionDialog
+from .settings import (
+    get_saved_window_position,
+    load_settings,
+    remember_selected_character,
+    remember_window_position,
+)
+
+PET_CLICK_SEQUENCE_MS = 350
 
 
 def run() -> None:
@@ -16,110 +23,84 @@ def run() -> None:
     _configure_styles()
 
     settings = load_settings()
-    selected_pet = settings.get("selected_pet")
+    selected_character = settings.get("selected_character")
 
-    if selected_pet not in PET_DEFINITIONS:
-        dialog = PetSelectionDialog(root)
-        root.wait_window(dialog)
-        selected_pet = dialog.selected_pet or DEFAULT_PET_ID
-        remember_selected_pet(settings, selected_pet)
+    if selected_character not in CHARACTER_DEFINITIONS:
+        selected_character = _choose_character(root, DEFAULT_CHARACTER_ID, allow_cancel=False)
+        remember_selected_character(settings, selected_character)
 
     root.deiconify()
     root.title("桌面宠物")
-    root.geometry("560x500")
+    root.geometry(_window_geometry(settings))
     root.resizable(False, False)
-    root.configure(bg="#fff6ea")
+    root.configure(bg=TRANSPARENT_COLOR)
+    root.overrideredirect(True)
+    root.attributes("-topmost", True)
+    try:
+        root.wm_attributes("-transparentcolor", TRANSPARENT_COLOR)
+    except tk.TclError:
+        pass
 
-    container = ttk.Frame(root, padding=18, style="Surface.TFrame")
+    container = ttk.Frame(root, style="Transparent.TFrame")
     container.pack(fill="both", expand=True)
 
-    top_bar = ttk.Frame(container, style="Surface.TFrame")
-    top_bar.pack(fill="x", pady=(0, 12))
+    pending_click_job: Optional[str] = None
+    click_count = 0
 
-    pet_name_var = tk.StringVar(value=_pet_status_text(selected_pet))
-    startup_mode_var = tk.StringVar(value=_startup_mode_text(settings))
-    settings_panel: SettingsPanel | None = None
-
-    ttk.Label(
-        top_bar,
-        textvariable=pet_name_var,
-        style="Subtitle.TLabel",
-    ).pack(side="left")
-
-    ttk.Label(
-        top_bar,
-        textvariable=startup_mode_var,
-        style="Muted.TLabel",
-    ).pack(side="left", padx=(12, 0))
-
-    scene = PetScene(container, selected_pet)
-
-    def refresh_panel_state() -> None:
-        remember_enabled = settings.get("selected_pet") != scene.pet_id
-        clear_enabled = settings.get("selected_pet") is not None
-        pet_name_var.set(_pet_status_text(scene.pet_id))
-        startup_mode_var.set(_startup_mode_text(settings))
-
-        if settings_panel and settings_panel.winfo_exists():
-            settings_panel.update_state(
-                current_pet_text=_pet_status_text(scene.pet_id),
-                startup_mode_text=_startup_mode_text(settings),
-                remember_enabled=remember_enabled,
-                clear_enabled=clear_enabled,
-            )
-
-    def handle_reselect() -> None:
-        dialog = PetSelectionDialog(root, initial_pet_id=scene.pet_id, allow_cancel=True)
-        root.wait_window(dialog)
-
-        if not dialog.selected_pet or dialog.selected_pet == scene.pet_id:
-            return
-
-        scene.set_pet(dialog.selected_pet)
-        remember_selected_pet(settings, dialog.selected_pet)
-        refresh_panel_state()
-
-    def handle_restore_default() -> None:
-        scene.set_pet(DEFAULT_PET_ID)
-        remember_selected_pet(settings, DEFAULT_PET_ID)
-        refresh_panel_state()
-
-    def handle_clear_startup_choice() -> None:
-        clear_selected_pet(settings)
-        refresh_panel_state()
-
-    def handle_remember_current_pet() -> None:
-        remember_selected_pet(settings, scene.pet_id)
-        refresh_panel_state()
-
-    def open_settings_panel() -> None:
-        nonlocal settings_panel
-        if settings_panel and settings_panel.winfo_exists():
-            settings_panel.focus_panel()
-            return
-
-        settings_panel = SettingsPanel(
-            master=root,
-            current_pet_text=_pet_status_text(scene.pet_id),
-            startup_mode_text=_startup_mode_text(settings),
-            on_reselect=handle_reselect,
-            on_restore_default=handle_restore_default,
-            on_clear_startup_choice=handle_clear_startup_choice,
-            on_remember_current_pet=handle_remember_current_pet,
-        )
-        refresh_panel_state()
-
-    ttk.Button(
-        top_bar,
-        text="设置",
-        command=open_settings_panel,
-        style="Secondary.TButton",
-    ).pack(side="right")
-
+    scene = PetScene(container, selected_character)
     scene.pack(fill="both", expand=True)
-    scene.start()
 
+    def apply_character(character_id: str) -> None:
+        scene.set_character(character_id)
+        remember_selected_character(settings, character_id)
+
+    def open_character_selection() -> None:
+        selected = _choose_character(root, scene.character_id, allow_cancel=True)
+        if selected:
+            apply_character(selected)
+
+    def finalize_character_click() -> None:
+        nonlocal pending_click_job, click_count
+        current_click_count = click_count
+        pending_click_job = None
+        click_count = 0
+
+        if current_click_count >= 3:
+            scene.hide_menu()
+            open_character_selection()
+
+    def handle_character_click() -> None:
+        nonlocal pending_click_job, click_count
+        click_count += 1
+        scene.show_root_menu()
+
+        if pending_click_job:
+            root.after_cancel(pending_click_job)
+
+        pending_click_job = root.after(PET_CLICK_SEQUENCE_MS, finalize_character_click)
+
+    def handle_character_drop(window_x: int, window_y: int) -> None:
+        remember_window_position(settings, window_x, window_y)
+
+    def show_exit_menu(pointer_x: int, pointer_y: int) -> None:
+        menu = tk.Menu(root, tearoff=0)
+        menu.add_command(label="退出程序", command=root.destroy)
+        try:
+            menu.tk_popup(pointer_x, pointer_y)
+        finally:
+            menu.grab_release()
+
+    scene.set_interaction_callbacks(handle_character_click, show_exit_menu, handle_character_drop)
+    scene.start()
     root.mainloop()
+
+
+def _choose_character(root: tk.Tk, initial_character_id: str, allow_cancel: bool) -> Optional[str]:
+    dialog = CharacterSelectionDialog(root, initial_character_id=initial_character_id, allow_cancel=allow_cancel)
+    root.wait_window(dialog)
+    if allow_cancel:
+        return dialog.selected_character
+    return dialog.selected_character or DEFAULT_CHARACTER_ID
 
 
 def _configure_styles() -> None:
@@ -127,9 +108,9 @@ def _configure_styles() -> None:
     style.theme_use("clam")
 
     style.configure("Surface.TFrame", background="#fff6ea")
+    style.configure("Transparent.TFrame", background=TRANSPARENT_COLOR)
     style.configure("Card.TFrame", background="#fffdf8", relief="flat", borderwidth=1)
     style.configure("CardSelected.TFrame", background="#ffe7c7", relief="flat", borderwidth=1)
-
     style.configure(
         "Title.TLabel",
         background="#fff6ea",
@@ -141,18 +122,6 @@ def _configure_styles() -> None:
         background="#fff6ea",
         foreground="#6c6258",
         font=("Microsoft YaHei UI", 10),
-    )
-    style.configure(
-        "Subtitle.TLabel",
-        background="#fff6ea",
-        foreground="#5a4d41",
-        font=("Microsoft YaHei UI", 10, "bold"),
-    )
-    style.configure(
-        "Muted.TLabel",
-        background="#fff6ea",
-        foreground="#88796c",
-        font=("Microsoft YaHei UI", 9),
     )
     style.configure(
         "CardTitle.TLabel",
@@ -174,10 +143,7 @@ def _configure_styles() -> None:
         borderwidth=0,
         padding=(14, 8),
     )
-    style.map(
-        "Primary.TButton",
-        background=[("active", "#f5c48e"), ("pressed", "#e1aa6c")],
-    )
+    style.map("Primary.TButton", background=[("active", "#f5c48e"), ("pressed", "#e1aa6c")])
     style.configure(
         "Secondary.TButton",
         background="#fff4e6",
@@ -186,10 +152,7 @@ def _configure_styles() -> None:
         borderwidth=1,
         padding=(12, 8),
     )
-    style.map(
-        "Secondary.TButton",
-        background=[("active", "#fdebd2"), ("pressed", "#f4ddbd")],
-    )
+    style.map("Secondary.TButton", background=[("active", "#fdebd2"), ("pressed", "#f4ddbd")])
     style.configure(
         "Danger.TButton",
         background="#f6ddd7",
@@ -198,44 +161,25 @@ def _configure_styles() -> None:
         borderwidth=1,
         padding=(12, 8),
     )
-    style.map(
-        "Danger.TButton",
-        background=[("active", "#f2d0c7"), ("pressed", "#e8c1b7")],
-    )
+    style.map("Danger.TButton", background=[("active", "#f2d0c7"), ("pressed", "#e8c1b7")])
     style.configure(
         "Card.TRadiobutton",
         background="#fffdf8",
         foreground="#4c433b",
         font=("Microsoft YaHei UI", 10, "bold"),
     )
-    style.configure(
-        "PanelLabel.TLabel",
-        background="#fffdf8",
-        foreground="#7d7065",
-        font=("Microsoft YaHei UI", 9),
-    )
-    style.configure(
-        "PanelValue.TLabel",
-        background="#fffdf8",
-        foreground="#3b342d",
-        font=("Microsoft YaHei UI", 11, "bold"),
-    )
-    style.configure(
-        "PanelHint.TLabel",
-        background="#fffdf8",
-        foreground="#5d5349",
-        font=("Microsoft YaHei UI", 9),
-    )
+
+def _window_geometry(settings: dict) -> str:
+    position = get_saved_window_position(settings)
+    if position:
+        return f"{PetScene.WINDOW_WIDTH}x{PetScene.WINDOW_HEIGHT}+{position[0]}+{position[1]}"
+    return _default_geometry()
 
 
-def _pet_status_text(pet_id: str) -> str:
-    pet = PET_DEFINITIONS.get(pet_id, PET_DEFINITIONS[DEFAULT_PET_ID])
-    return f"当前陪伴你的是：{pet.label}"
+def _default_window_position() -> tuple[int, int]:
+    return 80, 120
 
 
-def _startup_mode_text(settings: dict) -> str:
-    selected_pet = settings.get("selected_pet")
-    if selected_pet in PET_DEFINITIONS:
-        pet = PET_DEFINITIONS[selected_pet]
-        return f"下次启动会直接使用：{pet.label}"
-    return "下次启动会重新进入宠物选择界面"
+def _default_geometry() -> str:
+    default_x, default_y = _default_window_position()
+    return f"{PetScene.WINDOW_WIDTH}x{PetScene.WINDOW_HEIGHT}+{default_x}+{default_y}"

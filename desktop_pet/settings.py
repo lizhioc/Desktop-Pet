@@ -8,7 +8,9 @@ DATA_DIR = APP_ROOT / "data"
 SETTINGS_PATH = DATA_DIR / "settings.json"
 
 DEFAULT_SETTINGS = {
-    "selected_pet": None,
+    "selected_character": None,
+    "window_x": None,
+    "window_y": None,
 }
 
 
@@ -33,11 +35,20 @@ def save_settings(settings: dict) -> None:
         json.dump(settings, file, ensure_ascii=False, indent=2)
 
 
-def remember_selected_pet(settings: dict, pet_id: str) -> None:
-    settings["selected_pet"] = pet_id
+def remember_selected_character(settings: dict, character_id: str) -> None:
+    settings["selected_character"] = character_id
     save_settings(settings)
 
 
-def clear_selected_pet(settings: dict) -> None:
-    settings["selected_pet"] = None
+def get_saved_window_position(settings: dict) -> tuple[int, int] | None:
+    window_x = settings.get("window_x")
+    window_y = settings.get("window_y")
+    if isinstance(window_x, int) and isinstance(window_y, int):
+        return window_x, window_y
+    return None
+
+
+def remember_window_position(settings: dict, window_x: int, window_y: int) -> None:
+    settings["window_x"] = int(window_x)
+    settings["window_y"] = int(window_y)
     save_settings(settings)
