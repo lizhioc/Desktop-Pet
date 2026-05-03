@@ -6,6 +6,8 @@
 
 - 首次启动时弹出角色选择界面，可选择 `男生` 或 `女生`。
 - 后续启动会记住上一次选择的角色和窗口位置。
+- 程序图标使用羽毛图标，运行窗口和打包后的 exe 保持一致。
+- 运行时生成的 `data` 文件夹会在 Windows 上自动设置为隐藏。
 - 主窗口为无边框透明窗口，只显示桌宠人物本体。
 - 站立状态会从当前角色的站立素材中随机切换，切换间隔为 `3-10` 秒随机。
 - 按住桌宠可拖动位置，拖动时会显示当前角色的抓取姿态。
@@ -28,6 +30,30 @@
 python main.py
 ```
 
+## 打包 exe
+
+项目使用 PyInstaller 打包为 Windows 可执行文件。首次打包前先安装构建依赖：
+
+```bash
+python -m pip install -r requirements-build.txt
+```
+
+然后执行：
+
+```powershell
+.\build_exe.ps1
+```
+
+打包完成后，可执行文件会生成在：
+
+```text
+dist\DesktopPet.exe
+```
+
+`DesktopPet.exe` 会内置 Python 运行环境和项目素材，复制到其他 Windows 电脑后可以直接运行。运行时产生的角色选择和窗口位置记录会保存在 exe 同目录的 `data` 文件夹中。
+
+如果重新打包后资源管理器里仍显示旧图标，可以先关闭资源管理器预览、删除旧的 `dist` 目录后重新打包，或把 exe 改个文件名再查看，这是 Windows 图标缓存导致的显示延迟。
+
 ## 素材目录
 
 项目会从 `assets/pet` 下读取角色素材：
@@ -39,11 +65,14 @@ python main.py
 - `catch`：拖动抓取姿态。
 - `interact`：互动动作姿态。
 
+程序图标位于 `assets/icons`。
+
 ## 项目结构
 
 ```text
 .
 ├── assets
+│   ├── icons
 │   └── pet
 │       ├── boy
 │       ├── girl
@@ -55,9 +84,13 @@ python main.py
 ├── desktop_pet
 │   ├── app.py
 │   ├── pets.py
+│   ├── paths.py
 │   ├── scene.py
 │   ├── selection.py
 │   └── settings.py
+├── build_exe.ps1
+├── DesktopPet.spec
 ├── main.py
+├── requirements-build.txt
 └── README.md
 ```

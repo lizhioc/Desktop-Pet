@@ -3,8 +3,9 @@ from __future__ import annotations
 from dataclasses import dataclass
 from pathlib import Path
 
-APP_ROOT = Path(__file__).resolve().parent.parent
-ASSET_ROOT = APP_ROOT / "assets" / "pet"
+from .paths import resource_root
+
+ASSET_ROOT = resource_root() / "assets" / "pet"
 
 
 @dataclass(frozen=True)

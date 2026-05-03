@@ -5,6 +5,7 @@ from tkinter import ttk
 from typing import Optional
 
 from .pets import CHARACTER_DEFINITIONS, DEFAULT_CHARACTER_ID
+from .paths import resource_root
 from .scene import PetScene, TRANSPARENT_COLOR
 from .selection import CharacterSelectionDialog
 from .settings import (
@@ -20,6 +21,7 @@ PET_CLICK_SEQUENCE_MS = 350
 def run() -> None:
     root = tk.Tk()
     root.withdraw()
+    _apply_window_icon(root)
     _configure_styles()
 
     settings = load_settings()
@@ -101,6 +103,17 @@ def _choose_character(root: tk.Tk, initial_character_id: str, allow_cancel: bool
     if allow_cancel:
         return dialog.selected_character
     return dialog.selected_character or DEFAULT_CHARACTER_ID
+
+
+def _apply_window_icon(root: tk.Tk) -> None:
+    icon_path = resource_root() / "assets" / "icons" / "feather.ico"
+    if not icon_path.exists():
+        return
+
+    try:
+        root.iconbitmap(default=str(icon_path))
+    except tk.TclError:
+        pass
 
 
 def _configure_styles() -> None:

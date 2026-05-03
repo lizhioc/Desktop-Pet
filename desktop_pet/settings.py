@@ -1,10 +1,12 @@
 from __future__ import annotations
 
+import ctypes
 import json
-from pathlib import Path
+import os
 
-APP_ROOT = Path(__file__).resolve().parent.parent
-DATA_DIR = APP_ROOT / "data"
+from .paths import runtime_root
+
+DATA_DIR = runtime_root() / "data"
 SETTINGS_PATH = DATA_DIR / "settings.json"
 
 DEFAULT_SETTINGS = {
@@ -31,6 +33,7 @@ def load_settings() -> dict:
 
 def save_settings(settings: dict) -> None:
     DATA_DIR.mkdir(parents=True, exist_ok=True)
+    _hide_data_dir_on_windows()
     with SETTINGS_PATH.open("w", encoding="utf-8") as file:
         json.dump(settings, file, ensure_ascii=False, indent=2)
 
@@ -52,3 +55,16 @@ def remember_window_position(settings: dict, window_x: int, window_y: int) -> No
     settings["window_x"] = int(window_x)
     settings["window_y"] = int(window_y)
     save_settings(settings)
+
+
+def _hide_data_dir_on_windows() -> None:
+    if os.name != "nt":
+        return
+
+    file_attribute_hidden = 0x02
+    kernel32 = ctypes.windll.kernel32
+    current_attributes = kernel32.GetFileAttributesW(str(DATA_DIR))
+    if current_attributes == -1:
+        return
+
+    kernel32.SetFileAttributesW(str(DATA_DIR), current_attributes | file_attribute_hidden)
